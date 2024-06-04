@@ -27,6 +27,7 @@ async function getSellers(params, callback) {
       s.community = ? 
       AND i.item_del_end_timestamp > CURRENT_TIMESTAMP 
       AND i.item_quantity > 0
+      AND s.membership_end_date > CURRENT_TIMESTAMP
   `;
 
   try {
