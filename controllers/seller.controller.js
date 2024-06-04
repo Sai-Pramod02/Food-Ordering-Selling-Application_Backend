@@ -14,6 +14,48 @@ const storage = multer.diskStorage({
     }
 });
 
+
+const checkMembershipStatus = async (req, res, next) => {
+    const phone = req.query.phone;
+    try {
+        const [seller] = await db.promise().query('SELECT membership_end_date FROM SELLER WHERE seller_phone = ?', [phone]);
+        if (seller.length > 0) {
+            const membershipEndDate = moment(seller[0].membership_end_date);
+            const currentDate = moment();
+            if (currentDate.isAfter(membershipEndDate)) {
+                return res.status(403).json({message :'Membership expired'});
+            }
+            next();
+        } else {
+            res.status(404).send('Seller not found');
+        }
+    } catch (error) {
+        console.error('Error checking membership status:', error);
+        res.status(500).send('Failed to check membership status');
+    }
+};
+
+exports.checkMembershipStatusSeller = async (req, res, nexr) => {
+const phone = req.query.phone;
+    try {
+        const [seller] = await db.promise().query('SELECT membership_end_date FROM SELLER WHERE seller_phone = ?', [phone]);
+        if (seller.length > 0) {
+            const membershipEndDate = moment(seller[0].membership_end_date);
+            const currentDate = moment();
+            if (currentDate.isAfter(membershipEndDate)) {
+                return res.status(403).json({message :'Membership expired'});
+            }
+            else{
+                return res.status(200).json({message : "Membership active"});
+            }
+            next();
+        } else {
+            res.status(404).send('Seller not found');
+        }
+    } catch (error) {
+        console.error('Error checking membership status:', error);
+        res.status(500).send('Failed to check membership status');
+    }}
 const upload = multer({ storage: storage });
 
 exports.sellerRegister = (req, res, next) => {
@@ -41,7 +83,7 @@ exports.sellerRegister = (req, res, next) => {
     });
 };
 
-exports.addItem = (req, res, next) => {
+exports.addItem = [checkMembershipStatus, (req, res, next) => {
     console.log("Add item hit");
     upload.single('item_photo')(req, res, async (err) => {
         if (err) {
@@ -75,9 +117,9 @@ exports.addItem = (req, res, next) => {
             return next(error);
         }
     });
-};
+}];
 
-exports.updateItem = (req, res, next) => {
+exports.updateItem = [checkMembershipStatus, (req, res, next) => {
     upload.single('item_photo')(req, res, async (err) => {
         const itemId = req.params.itemId;
         
@@ -129,11 +171,11 @@ exports.updateItem = (req, res, next) => {
             return next(error);
         }
     });
-};
+}];
 
 
-exports.getItems = async (req, res, next) => {
-    const sellerPhone = req.query.sellerPhone;
+exports.getItems =  [checkMembershipStatus,async (req, res, next) => {
+    const sellerPhone = req.query.phone;
 
     if (!sellerPhone) {
         return res.status(400).json({ error: 'Missing seller phone number' });
@@ -150,13 +192,13 @@ exports.getItems = async (req, res, next) => {
     } catch (error) {
         return next(error);
     }
-};
+}];
 
 
-exports.getSellerProfile = async (req, res, next) => {
+exports.getSellerProfile =   async(req, res, next) => {
     const phone = req.params.phone;
     try {
-        const [seller] = await db.promise().query('SELECT seller_name, seller_phone, seller_address, seller_upi, community, delivery_type FROM SELLER WHERE seller_phone = ?', [phone]);
+        const [seller] = await db.promise().query('SELECT seller_name, seller_phone, seller_address, seller_upi, community, delivery_type, membership_end_date FROM SELLER WHERE seller_phone = ?', [phone]);
         if (seller.length > 0) {
             res.status(200).json(seller[0]);
         } else {
@@ -188,7 +230,7 @@ exports.updateSellerProfile = async (req, res, next) => {
 
 
 // Fetch all orders for a specific seller
-exports.getOrdersForSeller = async (req, res, next) => {
+exports.getOrdersForSeller =  [checkMembershipStatus, async(req, res, next) => {
     const sellerPhone = req.params.phone;
     try {
         const [orders] = await db.promise().query(
@@ -200,10 +242,10 @@ exports.getOrdersForSeller = async (req, res, next) => {
         console.error('Error fetching orders for seller:', error);
         res.status(500).send('Failed to fetch orders for seller');
     }
-};
+}];
 
 // Fetch order items for a specific order
-exports.getOrderItems = async (req, res, next) => {
+exports.getOrderItems =  [checkMembershipStatus, async(req, res, next) => {
     console.log("Reached getORderItems");
     const orderId = req.params.orderId;
 
@@ -217,10 +259,10 @@ exports.getOrderItems = async (req, res, next) => {
         console.error('Error fetching order items:', error);
         res.status(500).send('Failed to fetch order items');
     }
-};
+}];
 
 // Mark an order as delivered
-exports.markOrderAsDelivered = async (req, res, next) => {
+exports.markOrderAsDelivered =  [checkMembershipStatus, async(req, res, next) => {
     const orderId = req.params.orderId;
 
     try {
@@ -233,9 +275,9 @@ exports.markOrderAsDelivered = async (req, res, next) => {
         console.error('Error marking order as delivered:', error);
         res.status(500).send('Failed to mark order as delivered');
     }
-};
+}];
 
-exports.updateOrderDeliveryType = async (req, res, next) => {
+exports.updateOrderDeliveryType =  [checkMembershipStatus, async(req, res, next) => {
     console.log("Reached update delivery_type");
     const orderId = req.params.orderId;
     const { delivery_type } = req.body;
@@ -250,4 +292,4 @@ exports.updateOrderDeliveryType = async (req, res, next) => {
         console.error('Error updating delivery type:', error);
         res.status(500).send('Failed to update delivery type');
     }
-};
+}];

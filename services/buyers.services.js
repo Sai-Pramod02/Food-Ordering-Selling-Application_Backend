@@ -17,7 +17,8 @@ async function getSellers(params, callback) {
       i.item_photo AS imageUrl, 
       i.item_del_start_timestamp,
       i.item_del_end_timestamp,
-      i.item_id
+      i.item_id,
+      s.membership_end_date
     FROM 
       SELLER s
     JOIN 
@@ -26,7 +27,6 @@ async function getSellers(params, callback) {
       s.community = ? 
       AND i.item_del_end_timestamp > CURRENT_TIMESTAMP 
       AND i.item_quantity > 0
-      AND seller_membership_status = 1
   `;
 
   try {

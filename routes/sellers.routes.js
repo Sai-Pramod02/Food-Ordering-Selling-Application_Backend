@@ -13,6 +13,9 @@ router.get('/orders/:phone', sellerController.getOrdersForSeller);
 router.put('/orders/:orderId/delivered', sellerController.markOrderAsDelivered);
 router.get('/orders/items/:orderId', sellerController.getOrderItems);
 router.post('/orders/delivery-type/:orderId', sellerController.updateOrderDeliveryType);
+router.get('/membershipStatus', sellerController.checkMembershipStatusSeller);
+
+
 
 
 module.exports = router;4
