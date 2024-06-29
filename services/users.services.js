@@ -3,11 +3,11 @@ const crypto = require("crypto");
 const { Body } = require("twilio/lib/twiml/MessagingResponse");
 const { format } = require("path");
 require('dotenv').config()
-const accountSid = 'ACa47aabfd14049b34b5159006ed560bb5';
-const authToken = '32df8b9d8910ee25ac78f5cc4a5f6256';
+const accountSid = process.env.accountSid;
+const authToken = process.env.authToken;
 const client = require('twilio')(accountSid, authToken);
 
-const key = "secret";
+const key = process.env.key;
 
 const sendSMS = async (body) => {
   let msgOptions = {
