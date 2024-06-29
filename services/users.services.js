@@ -12,7 +12,7 @@ const key = process.env.key;
 const sendSMS = async (body) => {
   let msgOptions = {
     from : '+16609002875',
-    to : '+918639133664',
+    to : '+917993823191',
     body
   }
   try{
