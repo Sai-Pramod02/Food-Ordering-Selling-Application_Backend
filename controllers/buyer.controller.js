@@ -159,19 +159,78 @@ exports.fetchItemDetails = async (req, res, next) => {
 
 exports.getBuyerOrders = async (req, res, next) => {
     const buyerPhone = req.params.phone;
-
     if (!buyerPhone) {
         return res.status(400).json({ error: 'Missing buyer phone number' });
     }
 
     try {
         const [orders] = await db.promise().query(
-            'SELECT o.*, s.seller_name FROM ORDERS o JOIN SELLER s ON o.seller_phone = s.seller_phone WHERE o.buyer_phone = ?',
+            `SELECT o.*, s.seller_name, r.order_rating as order_rating, r.order_review as order_review
+             FROM ORDERS o
+             JOIN SELLER s ON o.seller_phone = s.seller_phone
+             LEFT JOIN REVIEWS r ON o.order_id = r.order_id
+             WHERE o.buyer_phone = ?`,
             [buyerPhone]
         );
+        console.log(orders);
         return res.json(orders);
     } catch (error) {
+        console.log(error);
         return next(error);
     }
 };
 
+exports.submitRatingAndReview = (req, res) => {
+    const orderId = req.params.orderId;
+    const { seller_phone, rating, review } = req.body;
+
+    const insertReviewQuery = 'INSERT INTO REVIEWS (order_id, seller_phone, order_rating, order_review) VALUES (?, ?, ?, ?)';
+    const getSellerQuery = 'SELECT seller_rating, seller_no_of_rating FROM SELLER WHERE seller_phone = ?';
+    const updateSellerQuery = 'UPDATE SELLER SET seller_rating = ?, seller_no_of_rating = ? WHERE seller_phone = ?';
+
+    db.beginTransaction((err) => {
+        if (err) return res.status(500).json({ error: err });
+
+        db.query(insertReviewQuery, [orderId, seller_phone, rating, review], (err) => {
+            if (err) {
+                return db.rollback(() => res.status(500).json({ error: err }));
+            }
+
+            db.query(getSellerQuery, [seller_phone], (err, results) => {
+                if (err) {
+                    return db.rollback(() => res.status(500).json({ error: err }));
+                }
+
+                let currentRating = results[0].seller_rating;
+                let currentNoOfRating = results[0].seller_no_of_rating;
+
+                if (currentRating === null || currentNoOfRating === 0) {
+                    currentRating = 0;
+                    currentNoOfRating = 0;
+                }
+
+                const newNoOfRating = currentNoOfRating + 1;
+                let newRating = ((currentRating * currentNoOfRating) + rating) / newNoOfRating;
+
+                // Ensure the newRating does not exceed the bounds of 5
+                if (newRating > 5) {
+                    newRating = 5;
+                } else if (newRating < 0) {
+                    newRating = 0;
+                }
+
+                db.query(updateSellerQuery, [newRating.toFixed(2), newNoOfRating, seller_phone], (err) => {
+                    if (err) {
+                        return db.rollback(() => res.status(500).json({ error: err }));
+                    }
+                    db.commit((err) => {
+                        if (err) {
+                            return db.rollback(() => res.status(500).json({ error: err }));
+                        }
+                        res.status(200).json({ message: 'Review submitted successfully!' });
+                    });
+                });
+            });
+        });
+    });
+};

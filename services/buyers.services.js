@@ -32,7 +32,6 @@ async function getSellers(params, callback) {
 
   try {
     const [rows] = await db.promise().query(query, [community]);
-    console.log(rows);
     const sellersWithItems = [];
     rows.forEach(row => {
       const { name, seller_phone, rating, photoUrl, itemName, price, description, quantity, imageUrl, item_del_start_timestamp, item_del_end_timestamp, item_id } = row;

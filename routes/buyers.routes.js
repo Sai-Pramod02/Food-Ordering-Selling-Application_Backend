@@ -11,6 +11,8 @@ router.put('/buyer/:phone', buyerController.updateBuyerProfile);
 router.post('/placeOrder', buyerController.placeOrder);
 router.get('/items/:itemId', buyerController.fetchItemDetails);
 router.get('/orders/:phone', buyerController.getBuyerOrders);
+router.post('/reviews/:orderId', buyerController.submitRatingAndReview);
+
 
 
 

@@ -83,7 +83,7 @@ exports.sellerRegister = (req, res, next) => {
     });
 };
 
-exports.addItem = [checkMembershipStatus, (req, res, next) => {
+exports.addItem = [checkMembershipStatus,  (req, res, next) => {
     console.log("Add item hit");
     upload.single('item_photo')(req, res, async (err) => {
         if (err) {
@@ -187,7 +187,7 @@ exports.getItems =  [checkMembershipStatus,async (req, res, next) => {
             row.item_del_start_timestamp = moment(row.item_del_start_timestamp).tz('Asia/Kolkata').format();
             row.item_del_end_timestamp = moment(row.item_del_end_timestamp).tz('Asia/Kolkata').format();
         });
-        console.log(rows)
+    
         return res.json(rows);
     } catch (error) {
         return next(error);
@@ -230,7 +230,7 @@ exports.updateSellerProfile = async (req, res, next) => {
 
 
 // Fetch all orders for a specific seller
-exports.getOrdersForSeller =  [checkMembershipStatus, async(req, res, next) => {
+exports.getOrdersForSeller = [checkMembershipStatus, async (req, res, next) => {
     const sellerPhone = req.params.phone;
     try {
         const [orders] = await db.promise().query(
@@ -246,7 +246,6 @@ exports.getOrdersForSeller =  [checkMembershipStatus, async(req, res, next) => {
 
 // Fetch order items for a specific order
 exports.getOrderItems =  [checkMembershipStatus, async(req, res, next) => {
-    console.log("Reached getORderItems");
     const orderId = req.params.orderId;
 
     try {
@@ -278,7 +277,6 @@ exports.markOrderAsDelivered =  [checkMembershipStatus, async(req, res, next) =>
 }];
 
 exports.updateOrderDeliveryType =  [checkMembershipStatus, async(req, res, next) => {
-    console.log("Reached update delivery_type");
     const orderId = req.params.orderId;
     const { delivery_type } = req.body;
 
@@ -293,3 +291,49 @@ exports.updateOrderDeliveryType =  [checkMembershipStatus, async(req, res, next)
         res.status(500).send('Failed to update delivery type');
     }
 }];
+
+exports.getSellerReviews = (req, res) => {
+    const sellerPhone = req.params.sellerPhone;
+    const query = 'SELECT order_rating, order_review FROM REVIEWS WHERE seller_phone = ? AND order_rating > 0';
+    db.query(query, [sellerPhone], (error, results) => {
+        if (error) return res.status(500).json({ error });
+        res.status(200).json(results);
+    });
+};
+  exports.renewMembership = async (req, res, next) => {
+    console.log("Reached renew membership");
+    const { phone, months } = req.body;
+  
+    try {
+      // Get the current membership end date
+      const [rows] = await db.promise().query('SELECT membership_end_date FROM SELLER WHERE seller_phone = ?', [phone]);
+      if (rows.length === 0) {
+        return res.status(404).json({ message: 'Seller not found' });
+      }
+  
+      const currentEndDate = moment(rows[0].membership_end_date);
+      const now = moment();
+  
+      let newEndDate;
+      if (currentEndDate.isAfter(now)) {
+        newEndDate = currentEndDate.add(months, 'months').format('YYYY-MM-DD HH:mm:ss');
+      } else {
+        newEndDate = now.add(months, 'months').format('YYYY-MM-DD HH:mm:ss');
+      }
+  
+      const [result] = await db.promise().query(
+        'UPDATE SELLER SET membership_end_date = ? WHERE seller_phone = ?',
+        [newEndDate, phone]
+      );
+  
+      if (result.affectedRows > 0) {
+        res.status(200).json({ message: 'Membership renewed successfully' });
+      } else {
+        res.status(404).json({ message: 'Seller not found' });
+      }
+    } catch (error) {
+      console.error('Error renewing membership:', error);
+      res.status(500).json({ message: 'Failed to renew membership' });
+    }
+  };
+  
