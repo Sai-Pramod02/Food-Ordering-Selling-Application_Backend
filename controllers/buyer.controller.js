@@ -116,7 +116,7 @@ exports.placeOrder = async (req, res, next) => {
         
         // Insert into ORDERS table
         const [orderResult] = await db.promise().query(
-            'INSERT INTO ORDERS (buyer_phone, buyer_role, seller_phone, order_total_price, order_completed, order_delivered, order_rating, order_review) VALUES (?, ?, ?, ?, 0, 0, 0, "")',
+            'INSERT INTO ORDERS (buyer_phone, buyer_role, seller_phone, order_total_price, order_completed, order_delivered, ) VALUES (?, ?, ?, ?, 0, 0)',
             [buyer_phone, buyer_role, seller_phone, order_total_price]
         );
 

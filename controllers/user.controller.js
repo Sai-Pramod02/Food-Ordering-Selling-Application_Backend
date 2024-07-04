@@ -41,6 +41,7 @@ exports.verifyOtp = (req, res, next) => {
             // If the phone number is found in the SELLER table, the user is a seller
             return res.status(200).send({
                 userType: "seller",
+                community: sellerResults[0].community // Assuming 'community' is a column in the SELLER table
             });
         } else {
             // If the phone number is not found in the SELLER table, check the BUYER table
@@ -54,17 +55,20 @@ exports.verifyOtp = (req, res, next) => {
                     // If the phone number is found in the BUYER table, the user is a buyer
                     return res.status(200).send({
                         userType: "buyer",
+                        community: buyerResults[0].community // Assuming 'community' is a column in the BUYER table
                     });
                 } else {
                     // If the phone number is not found in either table, the user doesn't exist
                     return res.status(200).send({
                         userType: "none",
+                        community: null
                     });
                 }
             });
         }
     });
 };
+
 
 exports.getCommunities =  async (req, res, next) => {
   const sql = 'SELECT community_name FROM COMMUNITIES';
