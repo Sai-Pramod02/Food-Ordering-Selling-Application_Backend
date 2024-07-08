@@ -71,14 +71,15 @@ exports.sellerRegister = (req, res, next) => {
             seller_upi: req.body.seller_upi,
             image: req.file ? req.file.filename : null,
             community: req.body.community,
-            delivery_type: req.body.delivery_type
+            delivery_type: req.body.delivery_type,
+            membership_duration : req.body.membership_duration
         };
 
         sellerServices.sellerRegistration(params, (error, results) => {
             if (error) {
                 return next(error);
             }
-            return res.json(results);
+            return res.status(200).json(results);
         });
     });
 };
@@ -234,7 +235,7 @@ exports.getOrdersForSeller = [checkMembershipStatus, async (req, res, next) => {
     const sellerPhone = req.params.phone;
     try {
         const [orders] = await db.promise().query(
-            'SELECT o.order_id, o.buyer_phone, o.order_total_price, b.buyer_name, b.buyer_address, o.order_delivered, o.delivery_type FROM ORDERS o JOIN BUYER b ON o.buyer_phone = b.buyer_phone WHERE o.seller_phone = ?',
+            'SELECT o.order_id, o.buyer_phone, o.order_total_price, b.buyer_name, b.buyer_address, o.order_delivered, o.order_cancelled, o.delivery_type FROM ORDERS o JOIN BUYER b ON o.buyer_phone = b.buyer_phone WHERE o.seller_phone = ?',
             [sellerPhone]
         );
         res.status(200).json(orders);
@@ -243,7 +244,6 @@ exports.getOrdersForSeller = [checkMembershipStatus, async (req, res, next) => {
         res.status(500).send('Failed to fetch orders for seller');
     }
 }];
-
 // Fetch order items for a specific order
 exports.getOrderItems =  [checkMembershipStatus, async(req, res, next) => {
     const orderId = req.params.orderId;
@@ -336,4 +336,19 @@ exports.getSellerReviews = (req, res) => {
       res.status(500).json({ message: 'Failed to renew membership' });
     }
   };
+
+  exports.cancelOrder = async (req, res, next) => {
+    const orderId = req.params.orderId;
+    console.log(orderId);
+    try {
+        await db.promise().query(
+            'UPDATE ORDERS SET order_cancelled = 1, order_delivered = 1 WHERE order_id = ?',
+            [orderId]
+        );
+        res.status(200).send('Order marked as cancelled');
+    } catch (error) {
+        console.error('Error marking order as cancelled:', error);
+        res.status(500).send('Failed to mark order as cancelled');
+    }
+};
   
