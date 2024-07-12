@@ -12,7 +12,7 @@ router.post('/placeOrder', buyerController.placeOrder);
 router.get('/items/:itemId', buyerController.fetchItemDetails);
 router.get('/orders/:phone', buyerController.getBuyerOrders);
 router.post('/reviews/:orderId', buyerController.submitRatingAndReview);
-
+router.post('/orderStatus', buyerController.updateOrderStatus);
 
 
 

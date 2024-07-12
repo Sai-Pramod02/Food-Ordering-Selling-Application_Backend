@@ -16,8 +16,9 @@ router.post('/orders/delivery-type/:orderId', sellerController.updateOrderDelive
 router.get('/membershipStatus', sellerController.checkMembershipStatusSeller);
 router.get('/reviews/:sellerPhone', sellerController.getSellerReviews);
 router.post('/renewMembership', sellerController.renewMembership);
+router.put('/orders/cancel/:orderId', sellerController.cancelOrder);
 
 
 
 
-module.exports = router;4
+module.exports = router;

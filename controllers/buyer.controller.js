@@ -116,7 +116,7 @@ exports.placeOrder = async (req, res, next) => {
         
         // Insert into ORDERS table
         const [orderResult] = await db.promise().query(
-            'INSERT INTO ORDERS (buyer_phone, buyer_role, seller_phone, order_total_price, order_completed, order_delivered, order_rating, order_review) VALUES (?, ?, ?, ?, 0, 0, 0, "")',
+            'INSERT INTO ORDERS (buyer_phone, buyer_role, seller_phone, order_total_price, order_completed, order_delivered) VALUES (?, ?, ?, ?, 0, 0)',
             [buyer_phone, buyer_role, seller_phone, order_total_price]
         );
 
@@ -135,7 +135,7 @@ exports.placeOrder = async (req, res, next) => {
                 [item.quantity, item.item_id]
             );
         }
-        res.status(200).send('Order placed successfully');
+        res.status(200).json({order_id : order_id});
     } catch (error) {
         console.error('Error placing order:', error);
         res.status(500).send('Failed to place order');
@@ -233,4 +233,24 @@ exports.submitRatingAndReview = (req, res) => {
             });
         });
     });
+};
+
+exports.updateOrderStatus = async (req, res, next) => {
+    const { order_id, order_completed } = req.body;
+
+    try {
+        const [result] = await db.promise().query(
+            'UPDATE ORDERS SET order_completed = ? WHERE order_id = ?',
+            [order_completed, order_id]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).send('Order not found');
+        }
+
+        res.status(200).send('Order status updated successfully');
+    } catch (error) {
+        console.error('Error updating order status:', error);
+        res.status(500).send('Failed to update order status');
+    }
 };

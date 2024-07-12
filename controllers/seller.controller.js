@@ -16,21 +16,28 @@ const storage = multer.diskStorage({
 
 
 const checkMembershipStatus = async (req, res, next) => {
+     console.log("Checking for membership status");
     const phone = req.query.phone;
     try {
         const [seller] = await db.promise().query('SELECT membership_end_date FROM SELLER WHERE seller_phone = ?', [phone]);
+	console.log("Queried");
         if (seller.length > 0) {
-            const membershipEndDate = moment(seller[0].membership_end_date);
+	console.log("Selle length is greater than 0"); 
+           const membershipEndDate = moment(seller[0].membership_end_date);
+		console.log(membershipEndDate);
             const currentDate = moment();
             if (currentDate.isAfter(membershipEndDate)) {
+		console.log("Membership expired");
                 return res.status(403).json({message :'Membership expired'});
             }
+		console.log("hey there");
             next();
         } else {
+		console.log("Seller not found");
             res.status(404).send('Seller not found');
         }
     } catch (error) {
-        console.error('Error checking membership status:', error);
+        console.log('Error', error);
         res.status(500).send('Failed to check membership status');
     }
 };
@@ -46,6 +53,7 @@ const phone = req.query.phone;
                 return res.status(403).json({message :'Membership expired'});
             }
             else{
+		console.log("Active Membership");
                 return res.status(200).json({message : "Membership active"});
             }
             next();
@@ -53,7 +61,7 @@ const phone = req.query.phone;
             res.status(404).send('Seller not found');
         }
     } catch (error) {
-        console.error('Error checking membership status:', error);
+        console.log('Error checking membership status:', error);
         res.status(500).send('Failed to check membership status');
     }}
 const upload = multer({ storage: storage });
@@ -71,18 +79,18 @@ exports.sellerRegister = (req, res, next) => {
             seller_upi: req.body.seller_upi,
             image: req.file ? req.file.filename : null,
             community: req.body.community,
-            delivery_type: req.body.delivery_type
+            delivery_type: req.body.delivery_type,
+            membership_duration : req.body.membership_duration
         };
 
         sellerServices.sellerRegistration(params, (error, results) => {
             if (error) {
                 return next(error);
             }
-            return res.json(results);
+            return res.status(200).json(results);
         });
     });
 };
-
 exports.addItem = [checkMembershipStatus,  (req, res, next) => {
     console.log("Add item hit");
     upload.single('item_photo')(req, res, async (err) => {
@@ -98,7 +106,8 @@ exports.addItem = [checkMembershipStatus,  (req, res, next) => {
             item_price: req.body.item_price,
             item_photo: req.file ? req.file.filename : null,
             item_del_start_timestamp: req.body.item_del_start_timestamp,
-            item_del_end_timestamp: req.body.item_del_end_timestamp
+            item_del_end_timestamp: req.body.item_del_end_timestamp,
+	    order_end_date : req.body.order_end_date
         };
 
         // Ensure all required fields are present
@@ -109,8 +118,8 @@ exports.addItem = [checkMembershipStatus,  (req, res, next) => {
 
         // Add item data to the database
         try {
-            const sql = 'INSERT INTO ITEMS (seller_phone, item_name, item_desc, item_quantity, item_price, item_photo, item_del_start_timestamp, item_del_end_timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
-            await db.promise().query(sql, [seller_phone, item_name, item_desc, item_quantity, item_price, itemData.item_photo, item_del_start_timestamp, itemData.item_del_end_timestamp]);
+            const sql = 'INSERT INTO ITEMS (seller_phone, item_name, item_desc, item_quantity, item_price, item_photo, item_del_start_timestamp, item_del_end_timestamp, order_end_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
+            await db.promise().query(sql, [seller_phone, item_name, item_desc, item_quantity, item_price, itemData.item_photo, item_del_start_timestamp, itemData.item_del_end_timestamp, itemData.order_end_date]);
             return res.status(201).json({ status: 'Success', message: 'Item added successfully' });
         } catch (error) {
             console.log(error);
@@ -134,11 +143,12 @@ exports.updateItem = [checkMembershipStatus, (req, res, next) => {
             item_price: req.body.item_price,
             item_photo: req.file ? req.file.filename : null,
             item_del_start_timestamp: req.body.item_del_start_timestamp,
-            item_del_end_timestamp: req.body.item_del_end_timestamp
+            item_del_end_timestamp: req.body.item_del_end_timestamp,
+	   order_end_date : req.body.order_end_date
         };
 
         // Ensure all required fields are present
-        const { item_name, item_desc, item_quantity, item_price, item_del_start_timestamp, item_del_end_timestamp } = itemData;
+        const { item_name, item_desc, item_quantity, item_price, item_del_start_timestamp, item_del_end_timestamp, order_end_date } = itemData;
         if (!item_name || !item_desc || !item_quantity || !item_price || !item_del_start_timestamp || !item_del_end_timestamp) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
@@ -151,9 +161,10 @@ exports.updateItem = [checkMembershipStatus, (req, res, next) => {
                 'item_quantity = ?',
                 'item_price = ?',
                 'item_del_start_timestamp = ?',
-                'item_del_end_timestamp = ?'
+                'item_del_end_timestamp = ?',
+		'order_end_date = ?'
             ];
-            const values = [item_name, item_desc, item_quantity, item_price, item_del_start_timestamp, item_del_end_timestamp];
+            const values = [item_name, item_desc, item_quantity, item_price, item_del_start_timestamp, item_del_end_timestamp, order_end_date];
 
             if (itemData.item_photo) {
                 fields.push('item_photo = ?');
@@ -171,7 +182,7 @@ exports.updateItem = [checkMembershipStatus, (req, res, next) => {
             return next(error);
         }
     });
-}];
+}]
 
 
 exports.getItems =  [checkMembershipStatus,async (req, res, next) => {
@@ -183,10 +194,6 @@ exports.getItems =  [checkMembershipStatus,async (req, res, next) => {
 
     try {
         const [rows] = await db.promise().query('SELECT *, IFNULL(item_photo, "https://i.imgur.com/bOCEVJg.png") as item_photo FROM ITEMS WHERE seller_phone = ?', [sellerPhone]);
-        rows.forEach(row => {
-            row.item_del_start_timestamp = moment(row.item_del_start_timestamp).tz('Asia/Kolkata').format();
-            row.item_del_end_timestamp = moment(row.item_del_end_timestamp).tz('Asia/Kolkata').format();
-        });
     
         return res.json(rows);
     } catch (error) {
@@ -231,26 +238,29 @@ exports.updateSellerProfile = async (req, res, next) => {
 
 // Fetch all orders for a specific seller
 exports.getOrdersForSeller = [checkMembershipStatus, async (req, res, next) => {
+	
     const sellerPhone = req.params.phone;
     try {
         const [orders] = await db.promise().query(
-            'SELECT o.order_id, o.buyer_phone, o.order_total_price, b.buyer_name, b.buyer_address, o.order_delivered, o.delivery_type FROM ORDERS o JOIN BUYER b ON o.buyer_phone = b.buyer_phone WHERE o.seller_phone = ?',
+            'SELECT o.order_id, o.buyer_phone, o.order_total_price, b.buyer_name, b.buyer_address, o.order_delivered, o.delivery_type FROM ORDERS o JOIN BUYER b ON o.buyer_phone = b.buyer_phone WHERE o.seller_phone = ? AND o.order_completed = 1',
             [sellerPhone]
         );
+
         res.status(200).json(orders);
     } catch (error) {
-        console.error('Error fetching orders for seller:', error);
+        console.log('Error fetching orders for seller:', error);
         res.status(500).send('Failed to fetch orders for seller');
     }
 }];
 
 // Fetch order items for a specific order
 exports.getOrderItems =  [checkMembershipStatus, async(req, res, next) => {
+	console.log("Reached get order Items");
     const orderId = req.params.orderId;
 
     try {
         const [orderItems] = await db.promise().query(
-            'SELECT oi.item_id, i.item_name, oi.item_quantity, i.item_price FROM ORDER_ITEMS oi JOIN ITEMS i ON oi.item_id = i.item_id WHERE oi.order_id = ?',
+            'SELECT oi.item_id, i.item_name, oi.item_quantity, i.item_price, i.order_end_date FROM ORDER_ITEMS oi JOIN ITEMS i ON oi.item_id = i.item_id WHERE oi.order_id = ?',
             [orderId]
         );
         res.status(200).json(orderItems);
@@ -337,3 +347,18 @@ exports.getSellerReviews = (req, res) => {
     }
   };
   
+exports.cancelOrder = async (req, res, next) => {
+    const orderId = req.params.orderId;
+    console.log(orderId);
+    try {
+        await db.promise().query(
+            'UPDATE ORDERS SET order_cancelled = 1 WHERE order_id = ?',
+            [orderId]
+        );
+        res.status(200).send('Order marked as cancelled');
+    } catch (error) {
+        console.error('Error marking order as cancelled:', error);
+        res.status(500).send('Failed to mark order as cancelled');
+    }
+};
+

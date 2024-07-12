@@ -2,6 +2,7 @@ const db = require('../db/db');
 const mysql = require('mysql2/promise'); // Import the promise-based version
 
 async function getSellers(params, callback) {
+console.log("Reached getSellers");
   const { community } = params;
 
   const query = `
@@ -18,6 +19,7 @@ async function getSellers(params, callback) {
       i.item_del_start_timestamp,
       i.item_del_end_timestamp,
       i.item_id,
+      i.order_end_date,
       s.membership_end_date
     FROM 
       SELLER s
@@ -25,7 +27,7 @@ async function getSellers(params, callback) {
       ITEMS i ON s.seller_phone = i.seller_phone 
     WHERE 
       s.community = ? 
-      AND i.item_del_end_timestamp > CURRENT_TIMESTAMP 
+      AND i.order_end_date > CURRENT_TIMESTAMP 
       AND i.item_quantity > 0
       AND s.membership_end_date > CURRENT_TIMESTAMP
   `;
@@ -34,9 +36,9 @@ async function getSellers(params, callback) {
     const [rows] = await db.promise().query(query, [community]);
     const sellersWithItems = [];
     rows.forEach(row => {
-      const { name, seller_phone, rating, photoUrl, itemName, price, description, quantity, imageUrl, item_del_start_timestamp, item_del_end_timestamp, item_id } = row;
-      const itemData = { name: itemName, price, description, quantity, imageUrl, item_del_start_timestamp, item_del_end_timestamp, item_id, seller_phone };
-      
+      const { name, seller_phone, rating, photoUrl, itemName, price, description, quantity, imageUrl, item_del_start_timestamp, item_del_end_timestamp, item_id, order_end_date } = row;
+      const itemData = { name: itemName, price, description, quantity, imageUrl, item_del_start_timestamp, item_del_end_timestamp, item_id, seller_phone, order_end_date };
+console.log(itemData);      
       const existingSeller = sellersWithItems.find(seller => seller.seller_phone === seller_phone);
       if (existingSeller) {
         existingSeller.allItems.push(itemData);
@@ -51,6 +53,7 @@ async function getSellers(params, callback) {
         sellersWithItems.push(newSeller);
       }
     });
+
     callback(null, sellersWithItems);
   } catch (error) {
     console.error('Error in getSellers:', error);
