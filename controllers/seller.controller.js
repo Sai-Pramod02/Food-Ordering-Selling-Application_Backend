@@ -4,6 +4,7 @@ const path = require('path');
 const sellerServices = require('../services/sellers.services');
 const db = require('../db/db');
 const moment = require('moment-timezone');
+const pushNotifcationController = require('../controllers/push_notification.controller')
 
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
@@ -80,7 +81,8 @@ exports.sellerRegister = (req, res, next) => {
             image: req.file ? req.file.filename : null,
             community: req.body.community,
             delivery_type: req.body.delivery_type,
-            membership_duration : req.body.membership_duration
+            membership_duration : req.body.membership_duration,
+		sellerFssai : req.body.seller_fssai
         };
 
         sellerServices.sellerRegistration(params, (error, results) => {
@@ -187,14 +189,14 @@ exports.updateItem = [checkMembershipStatus, (req, res, next) => {
 
 exports.getItems =  [checkMembershipStatus,async (req, res, next) => {
     const sellerPhone = req.query.phone;
-
+      console.log(sellerPhone);
     if (!sellerPhone) {
         return res.status(400).json({ error: 'Missing seller phone number' });
     }
 
     try {
         const [rows] = await db.promise().query('SELECT *, IFNULL(item_photo, "https://i.imgur.com/bOCEVJg.png") as item_photo FROM ITEMS WHERE seller_phone = ?', [sellerPhone]);
-    
+         console.log(rows);  
         return res.json(rows);
     } catch (error) {
         return next(error);
@@ -237,12 +239,12 @@ exports.updateSellerProfile = async (req, res, next) => {
 
 
 // Fetch all orders for a specific seller
-exports.getOrdersForSeller = [checkMembershipStatus, async (req, res, next) => {
-	
+
+exports.getOrdersForSeller = [checkMembershipStatus, async (req, res, next) => {	
     const sellerPhone = req.params.phone;
     try {
         const [orders] = await db.promise().query(
-            'SELECT o.order_id, o.buyer_phone, o.order_total_price, b.buyer_name, b.buyer_address, o.order_delivered, o.delivery_type FROM ORDERS o JOIN BUYER b ON o.buyer_phone = b.buyer_phone WHERE o.seller_phone = ? AND o.order_completed = 1',
+            'SELECT o.order_id, o.buyer_phone, o.order_total_price, b.buyer_name, b.buyer_address, o.order_delivered, o.delivery_type, o.order_cancelled FROM ORDERS o JOIN BUYER b ON o.buyer_phone = b.buyer_phone WHERE o.seller_phone = ? AND o.order_completed = 1',
             [sellerPhone]
         );
 
@@ -270,36 +272,58 @@ exports.getOrderItems =  [checkMembershipStatus, async(req, res, next) => {
     }
 }];
 
-// Mark an order as delivered
-exports.markOrderAsDelivered =  [checkMembershipStatus, async(req, res, next) => {
+exports.markOrderAsDelivered = [checkMembershipStatus, async (req, res, next) => {
     const orderId = req.params.orderId;
 
     try {
-        await db.promise().query(
+        const [orderResult] = await db.promise().query(
             'UPDATE ORDERS SET order_delivered = 1 WHERE order_id = ?',
             [orderId]
         );
-        res.status(200).send('Order marked as delivered');
+
+        const [buyerResult] = await db.promise().query(
+            'SELECT player_id FROM BUYER WHERE buyer_phone = (SELECT buyer_phone FROM ORDERS WHERE order_id = ?)',
+            [orderId]
+        );
+
+        if (buyerResult.length === 0) {
+            return res.status(404).send('Buyer not found');
+        }
+
+        const playerId = buyerResult[0].player_id;
+
+        res.status(200).json({ message: 'Order marked as delivered', player_id: playerId });
     } catch (error) {
         console.error('Error marking order as delivered:', error);
         res.status(500).send('Failed to mark order as delivered');
     }
 }];
+exports.updateOrderDeliveryType = [checkMembershipStatus, async (req, res, next) => {
+  const orderId = req.params.orderId;
+  const { delivery_type } = req.body;
 
-exports.updateOrderDeliveryType =  [checkMembershipStatus, async(req, res, next) => {
-    const orderId = req.params.orderId;
-    const { delivery_type } = req.body;
+  try {
+    await db.promise().query(
+      'UPDATE ORDERS SET delivery_type = ? WHERE order_id = ?',
+      [delivery_type, orderId]
+    );
 
-    try {
-        await db.promise().query(
-            'UPDATE ORDERS SET delivery_type = ? WHERE order_id = ?',
-            [delivery_type, orderId]
-        );
-        res.status(200).send('Delivery type updated successfully');
-    } catch (error) {
-        console.error('Error updating delivery type:', error);
-        res.status(500).send('Failed to update delivery type');
+    const [result] = await db.promise().query(
+      'SELECT B.player_id FROM ORDERS O JOIN BUYER B ON O.buyer_phone = B.buyer_phone WHERE O.order_id = ?',
+      [orderId]
+    );
+
+    const playerId = result.length > 0 ? result[0].player_id : null;
+
+    if (playerId) {
+      res.status(200).json({ player_id: playerId, message: 'Delivery type updated successfully' });
+    } else {
+      res.status(404).json({ message: 'Player ID not found' });
     }
+  } catch (error) {
+    console.error('Error updating delivery type:', error);
+    res.status(500).send('Failed to update delivery type');
+  }
 }];
 
 exports.getSellerReviews = (req, res) => {
@@ -346,19 +370,66 @@ exports.getSellerReviews = (req, res) => {
       res.status(500).json({ message: 'Failed to renew membership' });
     }
   };
-  
+
 exports.cancelOrder = async (req, res, next) => {
-    const orderId = req.params.orderId;
-    console.log(orderId);
-    try {
-        await db.promise().query(
-            'UPDATE ORDERS SET order_cancelled = 1 WHERE order_id = ?',
-            [orderId]
-        );
-        res.status(200).send('Order marked as cancelled');
-    } catch (error) {
-        console.error('Error marking order as cancelled:', error);
-        res.status(500).send('Failed to mark order as cancelled');
+  const orderId = req.params.orderId;
+
+  try {
+    // Mark the entire order as cancelled and move to past items
+    await db.promise().query(
+      'UPDATE ORDERS SET order_cancelled = 1 WHERE order_id = ?',
+      [orderId]
+    );
+
+    // Get the buyer's phone number from the ORDERS table
+    const [order] = await db.promise().query(
+      'SELECT buyer_phone FROM ORDERS WHERE order_id = ?',
+      [orderId]
+    );
+
+    if (order.length === 0) {
+      return res.status(404).send('Order not found');
     }
+
+    const buyerPhone = order[0].buyer_phone;
+
+    // Get the buyer's player ID from the BUYER table
+    const [buyer] = await db.promise().query(
+      'SELECT player_id FROM BUYER WHERE buyer_phone = ?',
+      [buyerPhone]
+    );
+
+    if (buyer.length === 0) {
+      return res.status(404).send('Buyer not found');
+    }
+
+    const buyerPlayerId = buyer[0].player_id;
+    if (!buyerPlayerId) {
+      return res.status(400).send('Invalid player ID');
+    }
+
+    // Return the player ID
+    res.status(200).json({
+      player_id: buyerPlayerId
+    });
+  } catch (error) {
+    console.error('Error marking order as cancelled:', error);
+    res.status(500).send('Failed to mark order as cancelled');
+  }
 };
 
+exports.updateCancellationPaymentStatus = async (req, res, next) => {
+	const { order_id, cancellation_payment_status } = req.body;
+
+	console.log("cancellation payment status :- " + cancellation_payment_status);
+    try {
+        await db.promise().query(
+            'UPDATE ORDERS SET cancellation_payment_status = ? WHERE order_id = ?',
+            [cancellation_payment_status, order_id]
+        );
+        res.status(200).send('Cancellation payment status updated successfully');
+    } catch (error) {
+        console.error('Error updating cancellation payment status:', error);
+        res.status(500).send('Failed to update cancellation payment status');
+    }
+};

@@ -67,7 +67,6 @@ exports.updateBuyerProfile = async (req, res, next) => {
         res.status(500).send('Failed to update buyer profile');
     } 
 };
-
 exports.placeOrder = async (req, res, next) => {
     console.log("Received placeOrder");
     const { buyer_phone, buyer_role, seller_phone, items } = req.body; // items is an array of {item_id, quantity}
@@ -81,26 +80,23 @@ exports.placeOrder = async (req, res, next) => {
         if (buyer_role === 'buyer') {
             buyerQuery = 'SELECT buyer_phone FROM BUYER WHERE buyer_phone = ?';
             const [buyerResult] = await db.promise().query(buyerQuery, [buyer_phone]);
-        if (buyerResult.length === 0) {
-            console.log("Buyer does not exist")
-            return res.status(400).send('Buyer does not exist');
-        }
+            if (buyerResult.length === 0) {
+                console.log("Buyer does not exist")
+                return res.status(400).send('Buyer does not exist');
+            }
         } else if (buyer_role === 'seller') {
-        const [sellerResult] = await db.promise().query('SELECT seller_phone FROM SELLER WHERE seller_phone = ?', [seller_phone]);
-        if (sellerResult.length === 0) {
-            console.log("seller does not exist")
-            return res.status(400).send('Seller does not exist');
-        }
+            const [sellerResult] = await db.promise().query('SELECT seller_phone FROM SELLER WHERE seller_phone = ?', [seller_phone]);
+            if (sellerResult.length === 0) {
+                console.log("seller does not exist")
+                return res.status(400).send('Seller does not exist');
+            }
         } else {
             console.log("Invalid buyer role")
             return res.status(400).send('Invalid buyer role');
         }
 
-        
-
         // Validate seller_phone
         console.log(seller_phone);
-        
 
         // Calculate total price
         for (const item of items) {
@@ -113,13 +109,12 @@ exports.placeOrder = async (req, res, next) => {
                 return res.status(400).send(`Item with id ${item.item_id} does not exist`);
             }
         }
-        
+
         // Insert into ORDERS table
         const [orderResult] = await db.promise().query(
             'INSERT INTO ORDERS (buyer_phone, buyer_role, seller_phone, order_total_price, order_completed, order_delivered) VALUES (?, ?, ?, ?, 0, 0)',
             [buyer_phone, buyer_role, seller_phone, order_total_price]
         );
-
         const order_id = orderResult.insertId;
 
         // Insert into ORDER_ITEMS table
@@ -135,7 +130,12 @@ exports.placeOrder = async (req, res, next) => {
                 [item.quantity, item.item_id]
             );
         }
-        res.status(200).json({order_id : order_id});
+
+        // Retrieve the player_id of the seller
+        const [sellerPlayerResult] = await db.promise().query('SELECT player_id FROM SELLER WHERE seller_phone = ?', [seller_phone]);
+        const sellerPlayerId = sellerPlayerResult[0]?.player_id;
+
+        res.status(200).json({ order_id: order_id, seller_player_id: sellerPlayerId });
     } catch (error) {
         console.error('Error placing order:', error);
         res.status(500).send('Failed to place order');
@@ -165,7 +165,7 @@ exports.getBuyerOrders = async (req, res, next) => {
 
     try {
         const [orders] = await db.promise().query(
-            `SELECT o.*, s.seller_name, r.order_rating as order_rating, r.order_review as order_review
+            `SELECT o.*, s.seller_name,s.seller_address, r.order_rating as order_rating, r.order_review as order_review
              FROM ORDERS o
              JOIN SELLER s ON o.seller_phone = s.seller_phone
              LEFT JOIN REVIEWS r ON o.order_id = r.order_id
@@ -254,3 +254,29 @@ exports.updateOrderStatus = async (req, res, next) => {
         res.status(500).send('Failed to update order status');
     }
 };
+exports.getSellerItems = (req, res, next) => {
+  const sellerPhone = req.query.sellerPhone;
+
+  if (!sellerPhone) {
+    return res.status(400).json({ error: 'Seller phone is required' });
+  }
+
+  const query = `
+    SELECT s.seller_phone, i.item_name, i.item_id, i.item_desc, i.item_quantity, i.item_price, i.item_photo, i.item_del_start_timestamp, i.item_del_end_timestamp, i.order_end_date
+    FROM ITEMS i
+    JOIN SELLER s ON i.seller_phone = s.seller_phone
+    WHERE i.order_end_date > CONVERT_TZ(CURRENT_TIMESTAMP, 'SYSTEM', 'Asia/Kolkata')
+      AND i.item_quantity > 0
+      AND s.membership_end_date > CONVERT_TZ(CURRENT_TIMESTAMP, 'SYSTEM', 'Asia/Kolkata')
+      AND s.seller_phone = ?`;
+
+  db.query(query, [sellerPhone], (err, results) => {
+    if (err) {
+      console.error('Error fetching seller items:', err);
+      return res.status(500).json({ error: 'Failed to fetch seller items' });
+    }
+
+    res.json(results);
+  });
+};
+

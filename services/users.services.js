@@ -6,6 +6,7 @@ require('dotenv').config()
 const accountSid = process.env.accountSid;
 const authToken = process.env.authToken;
 const client = require('twilio')(accountSid, authToken);
+const db = require('../db/db');
 
 const key = process.env.key;
 
@@ -59,7 +60,7 @@ async function createOtp(params, callback){
     }
     return callback("Invalid OTP");
   }
-
+  
   module.exports = {
     createOtp,
     verifyOTP
